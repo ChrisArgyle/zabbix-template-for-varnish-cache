@@ -131,7 +131,7 @@ def send(options):
             rows += row
 
     # Submit metrics.
-    rc, output = execute('zabbix_sender -T -r -i - %(config)s %(server)s %(port)s %(host)s' % {
+    rc, output = execute('zabbix_sender -vv -T -r -i - %(config)s %(server)s %(port)s %(host)s' % {
         'config':
             '-c "%s"' % options.zabbix_config
             if options.zabbix_config is not None else '',
@@ -217,7 +217,10 @@ def stats(name):
             if i > 0:
                 items = line.split()
                 if len(items) > 3:
-                    backends[items[0]] = (items[2] == 'Healthy')
+                    backends[items[0]] = {
+                        'healthy': (items[2] == 'Healthy'),
+                        'admin': items[1],
+                    }
     else:
         backends = None
         sys.stderr.write(output)
@@ -251,14 +254,22 @@ def stats(name):
                         else:
                             result[key] = value
         if backends is not None:
-            for backend, healthy in backends.items():
+            for backend, probe_status in backends.items():
                 key = rewriter.rewrite('VBE.' + backend + '.healthy')
                 result[key] = {
                     'type': 'VBE',
                     'ident': backend,
                     'flag': 'g',
                     'description': '',
-                    'value': int(healthy),
+                    'value': int(probe_status['healthy']),
+                }
+                key = rewriter.rewrite('VBE.' + backend + '.admin')
+                result[key] = {
+                    'type': 'VBE',
+                    'ident': backend,
+                    'flag': 'g',
+                    'description': '',
+                    'value': probe_status['admin'],
                 }
         return dict([
             (key, value)
